@@ -4,20 +4,30 @@ http://tools.ietf.org/id/draft-nottingham-http-link-header-06.txt.
 
 Usage:
 
->>> import link_header
->>> parse('<http://example.com/foo>; rel="foo", <http://example.com>; rel="up"')
-LinkHeader([Link('http://example.com/foo', rel='foo'), Link('http://example.com', rel='up')])
+>>> parse('<http://example.com/foo>; rel="self", <http://example.com>; rel="up"')
+LinkHeader([Link('http://example.com/foo', rel='self'), Link('http://example.com', rel='up')])
 >>> str(LinkHeader([Link("http://example.com/foo", rel="self"),
-...                 Link("http://example.com/", rel="up")])
-'<http://example.com/foo>; rel="self", <http://example.com/>; rel = "up"'
->>> str(LinkHeader([["http://example.com/foo", [["rel", "self"]]],
-...                 ["http://example.com/",    [["rel", "up"]]]])
-'<http://example.com/foo>; rel="self", <http://example.com/>; rel = "up"'
+...                 Link("http://example.com", rel="up")]))
+'<http://example.com/foo>; rel="self", <http://example.com>; rel="up"'
+
+Conversions to and from json-friendly list-based structures are also provided:
+
+>>> list(parse('<http://example.com/foo>; rel="self", <http://example.com>; rel="up"'))
+[['http://example.com/foo', [['rel', 'self']]], ['http://example.com', [['rel', 'up']]]]
+>>> str(LinkHeader([['http://example.com/foo', [['rel', 'self']]],
+...                 ['http://example.com', [['rel', 'up']]]]))
+'<http://example.com/foo>; rel="self", <http://example.com>; rel="up"'
+
+Note that Link attributes are represented as lists rather than dicts as the same
+attribute name may appear more than once.
 
 For further information see parse(), LinkHeader and Link.
 '''
 
 import re
+
+__all__ = ['parse', 'LinkHeader', 'Link']
+
 
 #
 # Regexes for link header parsing.  TOKEN and QUOTED in particular should conform to RFC2616.
@@ -105,6 +115,18 @@ class LinkHeader(object):
         [['http://example.com/foo', [['rel', 'foo']]], ['http://example.com', [['rel', 'up']]]]
         '''
         return list(self.links[key])
+        
+    def links_by_attr_pairs(self, pairs):
+        '''Lists links that have attribute pairs matching all the supplied pairs:
+        
+         >>> parse('<http://example.com/foo>; rel="foo", <http://example.com>; rel="up"'
+         ...      ).links_by_attr_pairs([('rel', 'up')])
+         [Link('http://example.com', rel='up')]
+        '''
+        return [link
+                for link in self.links
+                if all([key, value] in link.attr_pairs
+                       for key, value in pairs)]
 
 class Link(object):
     '''Represents a single link.
