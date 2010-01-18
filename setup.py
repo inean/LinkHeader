@@ -8,7 +8,7 @@ setup(name='LinkHeader',
       author='Michael Burrows',
       author_email='mjb@asplake.co.uk   ',
       url='http://bitbucket.org/asplake/link_header',
-      py_modules=['link_header']
+      py_modules=['link_header'],
       classifiers=["Development Status :: TBC",
                    "Intended Audience :: Developers",
                    "License :: OSI Approved :: BSD License",
