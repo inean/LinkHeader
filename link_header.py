@@ -2,24 +2,25 @@
 Parse and format link headers according to the draft spec
 http://tools.ietf.org/id/draft-nottingham-http-link-header-06.txt.
 
-Usage:
+Usage (assuming a suitable headers object in the environment):
 
->>> parse('<http://example.com/foo>; rel="self", <http://example.com>; rel="up"')
-LinkHeader([Link('http://example.com/foo', rel='self'), Link('http://example.com', rel='up')])
->>> str(LinkHeader([Link("http://example.com/foo", rel="self"),
-...                 Link("http://example.com", rel="up")]))
+>>> headers['Link'] = str(LinkHeader([Link("http://example.com/foo", rel="self"),
+...                                   Link("http://example.com", rel="up")]))
+>>> headers['Link']
 '<http://example.com/foo>; rel="self", <http://example.com>; rel="up"'
+>>> parse(headers['Link'])
+LinkHeader([Link('http://example.com/foo', rel='self'), Link('http://example.com', rel='up')])
 
 Conversions to and from json-friendly list-based structures are also provided:
 
->>> list(parse('<http://example.com/foo>; rel="self", <http://example.com>; rel="up"'))
+>>> list(parse(headers['Link']))
 [['http://example.com/foo', [['rel', 'self']]], ['http://example.com', [['rel', 'up']]]]
 >>> str(LinkHeader([['http://example.com/foo', [['rel', 'self']]],
 ...                 ['http://example.com', [['rel', 'up']]]]))
 '<http://example.com/foo>; rel="self", <http://example.com>; rel="up"'
 
-Note that Link attributes are represented as lists rather than dicts as the same
-attribute name may appear more than once.
+Link attributes are represented as lists rather than dicts here because the
+standard allows the same attribute name to appear more than once.
 
 For further information see parse(), LinkHeader and Link.
 '''
@@ -203,4 +204,7 @@ class _Scanner(object):
 
 if __name__ == '__main__':
     import doctest
+    
+    headers = dict(Link='<http://example.com/foo>; rel="self", <http://example.com>; rel="up"')
+
     doctest.testmod()
