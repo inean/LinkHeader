@@ -1,13 +1,13 @@
 '''
 Parse and format link headers according to the draft spec
-http://tools.ietf.org/id/draft-nottingham-http-link-header-06.txt.
+http://tools.ietf.org/id/draft-nottingham-http-link-header-07.txt.
 
 Usage (assuming a suitable headers object in the environment):
 
 >>> headers['Link'] = str(LinkHeader([Link("http://example.com/foo", rel="self"),
 ...                                   Link("http://example.com", rel="up")]))
 >>> headers['Link']
-'<http://example.com/foo>; rel="self", <http://example.com>; rel="up"'
+'<http://example.com/foo>; rel=self, <http://example.com>; rel=up'
 >>> parse(headers['Link'])
 LinkHeader([Link('http://example.com/foo', rel='self'), Link('http://example.com', rel='up')])
 
@@ -17,17 +17,21 @@ Conversions to and from json-friendly list-based structures are also provided:
 [['http://example.com/foo', [['rel', 'self']]], ['http://example.com', [['rel', 'up']]]]
 >>> str(LinkHeader([['http://example.com/foo', [['rel', 'self']]],
 ...                 ['http://example.com', [['rel', 'up']]]]))
-'<http://example.com/foo>; rel="self", <http://example.com>; rel="up"'
+'<http://example.com/foo>; rel=self, <http://example.com>; rel=up'
 
 Link attributes are represented as lists rather than dicts here because the
 standard allows the same attribute name to appear more than once.
+
+Limitation: any "title*" attributes should take values defined by RFC2231,
+section 7.  They are currently unsupported; link headers containing
+them *may* not parse.
 
 For further information see parse(), LinkHeader and Link.
 '''
 
 import re
 
-__all__ = ['parse', 'LinkHeader', 'Link']
+__all__ = ['parse', 'LinkHeader', 'Link', 'ParseException']
 
 
 #
@@ -36,36 +40,53 @@ __all__ = ['parse', 'LinkHeader', 'Link']
 # Acknowledgement: The QUOTED regexp is based on
 # http://stackoverflow.com/questions/249791/regexp-for-quoted-string-with-escaping-quotes/249937#249937
 #
-# Trailing spaces are consumed by each pattern.  The HREF pattern also allows for any leading spaces.
+# Trailing spaces are consumed by each pattern.  The RE_HREF pattern also allows for any leading spaces.
 #
-HREF   = re.compile(r' *< *([^>]*) *> *;? *')   # note: no attempt to check URI validity
-TOKEN  = r'([^()<>@,;:\"\[\]?={}\s]+)'          # non-empty sequence of non-separator characters
-QUOTED = r'"((?:[^"\\]|\\.)*)"'                 # double-quoted strings with backslash-escaped double quotes
-ATTR   = re.compile(r'%(TOKEN)s *= *(%(TOKEN)s|%(QUOTED)s) *' % locals())
-SEMI   = re.compile(r'; *')
-COMMA  = re.compile(r', *')
+
+QUOTED        = r'"((?:[^"\\]|\\.)*)"'                  # double-quoted strings with backslash-escaped double quotes
+TOKEN         = r'([^()<>@,;:\"\[\]?={}\s]+)'           # non-empty sequence of non-separator characters
+RE_COMMA_HREF = re.compile(r' *,? *< *([^>]*) *> *')    # includes ',' separator; no attempt to check URI validity
+RE_ONLY_TOKEN = re.compile(r'^%(TOKEN)s$' % locals())
+RE_ATTR       = re.compile(r'%(TOKEN)s *= *(%(TOKEN)s|%(QUOTED)s) *' % locals())
+RE_SEMI       = re.compile(r'; *')
+RE_COMMA      = re.compile(r', *')
 
    
 def parse(header):
-    '''Parse a link header string, returning a LinkHeader object
-    >>> parse('<http://example.com/foo>; rel="foo", <http://example.com>; rel="up"')
-    LinkHeader([Link('http://example.com/foo', rel='foo'), Link('http://example.com', rel='up')])
+    '''Parse a link header string, returning a LinkHeader object:
+    
+    >>> parse('<http://example.com/foo>; rel="foo bar", <http://example.com>; rel=up; type=text/html')
+    LinkHeader([Link('http://example.com/foo', rel='foo bar'), Link('http://example.com', rel='up', type='text/html')])
+
+    ParseException is raised in the event that the input string is not parsed completely:
+    
+    >>> parse('<http://example.com/foo> error')
+    Traceback (most recent call last):
+        ...
+    ParseException: ('link_header.parse() failed near %s', "'error'")
     '''
     scanner = _Scanner(header)
     links = []
-    while scanner.scan(HREF):
+    while scanner.scan(RE_COMMA_HREF):
         href = scanner[1]
         attrs = []
-        while scanner.scan(ATTR):
-            attr_name, token, quoted = scanner[1], scanner[3], scanner[4].replace(r'\"', '"')
-            attrs.append([attr_name, token or quoted])
-            if not scanner.scan(SEMI):
-                break
+        while scanner.scan(RE_SEMI):
+            if scanner.scan(RE_ATTR):
+                attr_name, token, quoted = scanner[1], scanner[3], scanner[4]
+                if quoted:
+                    attrs.append([attr_name, quoted.replace(r'\"', '"')])
+                else:
+                    attrs.append([attr_name, token])
         links.append(Link(href, attrs))
-        if not scanner.scan(COMMA):
-            break
+
+    if scanner.buf:
+        raise ParseException("link_header.parse() failed near %s", repr(scanner.buf))
 
     return LinkHeader(links)
+
+
+class ParseException(Exception):
+    pass
 
 
 class LinkHeader(object):
@@ -85,7 +106,7 @@ class LinkHeader(object):
         String conversion follows the spec:
         
         >>> str(LinkHeader([Link('http://example.com/foo', rel='foo'), Link('http://example.com', rel='up')]))
-        '<http://example.com/foo>; rel="foo", <http://example.com>; rel="up"'
+        '<http://example.com/foo>; rel=foo, <http://example.com>; rel=up'
         
         List conversion is json-friendly:
         
@@ -105,7 +126,7 @@ class LinkHeader(object):
         '''Formats a link header:
         
         >>> str(LinkHeader([Link('http://example.com/foo', rel='foo'), Link('http://example.com', rel='up')]))
-        '<http://example.com/foo>; rel="foo", <http://example.com>; rel="up"'
+        '<http://example.com/foo>; rel=foo, <http://example.com>; rel=up'
         '''
         return ', '.join(str(link) for link in self.links)
 
@@ -141,7 +162,7 @@ class Link(object):
         String conversion follows the spec:
         
         >>> str(Link('http://example.com', [('foo', 'bar'), ('foo', 'baz')], rel='self'))
-        '<http://example.com>; foo="bar"; foo="baz"; rel="self"'
+        '<http://example.com>; foo=bar; foo=baz; rel=self'
         
         List conversion is json-friendly:
 
@@ -169,14 +190,22 @@ class Link(object):
         '''Formats a single link:
         
         >>> str(Link('http://example.com/foo', [['rel', 'self']]))
-        '<http://example.com/foo>; rel="self"'
-        >>> str(Link('http://example.com/foo', [['rel', '"quoted"']]))
-        '<http://example.com/foo>; rel="\\\\"quoted\\\\""'
+        '<http://example.com/foo>; rel=self'
+        >>> str(Link('http://example.com/foo', [['rel', '"quoted"'], ['type', 'text/html'], ['title*', 'enc2231-string']]))
+        '<http://example.com/foo>; rel="\\\\"quoted\\\\""; type=text/html; title*=enc2231-string'
+        
+        Note that there is no explicit support for the title* attribute other
+        than to output it unquoted.  Where used, it is up to client applications to
+        provide values that meet RFC2231 Section 7.
         '''
-        return '; '.join(
-            ['<%s>' % self.href] + [
-                '%s="%s"' % (key, value.replace('"', r'\"'))
-                for key, value in self.attr_pairs])
+        def str_pair(key, value):
+            if RE_ONLY_TOKEN.match(value) or key.endswith('*'):
+                return '%s=%s' % (key, value)
+            else:
+                return '%s="%s"' % (key, value.replace('"', r'\"'))
+        return '; '.join(['<%s>' % self.href] +
+                         [str_pair(key, value)
+                          for key, value in self.attr_pairs])
 
     def __getitem__(self, key):
         '''Supports list conversion:
@@ -205,6 +234,6 @@ class _Scanner(object):
 if __name__ == '__main__':
     import doctest
     
-    headers = dict(Link='<http://example.com/foo>; rel="self", <http://example.com>; rel="up"')
+    headers = dict()
 
     doctest.testmod()
