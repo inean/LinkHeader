@@ -19,13 +19,6 @@ Conversions to and from json-friendly list-based structures are also provided:
 ...                 ['http://example.com', [['rel', 'up']]]]))
 '<http://example.com/foo>; rel=self, <http://example.com>; rel=up'
 
-Link attributes are represented as lists rather than dicts here because the
-standard allows the same attribute name to appear more than once.
-
-Limitation: any "title*" attributes should take values defined by RFC2231,
-section 7.  They are currently unsupported; link headers containing
-them *may* not parse.
-
 For further information see parse(), LinkHeader and Link.
 '''
 
@@ -33,6 +26,9 @@ import re
 
 __all__ = ['parse', 'LinkHeader', 'Link', 'ParseException']
 
+SINGLE_VALUED_ATTRS = ['rel', 'anchor', 'rev', 'media', 'title', 'type']
+MULTI_VALUED_ATTRS = ['hreflang', 'title*']
+STANDARD_ATTRS = SINGLE_VALUED_ATTRS + MULTI_VALUED_ATTRS
 
 #
 # Regexes for link header parsing.  TOKEN and QUOTED in particular should conform to RFC2616.
@@ -153,6 +149,7 @@ class LinkHeader(object):
 class Link(object):
     '''Represents a single link.
     '''
+    
     def __init__(self, href, attr_pairs=None, **kwargs):
         '''Initializes a Link object with an href and attributes either in
         the form of a sequence of key/value pairs &/or as keyword arguments.
@@ -191,8 +188,8 @@ class Link(object):
         
         >>> str(Link('http://example.com/foo', [['rel', 'self']]))
         '<http://example.com/foo>; rel=self'
-        >>> str(Link('http://example.com/foo', [['rel', '"quoted"'], ['type', 'text/html'], ['title*', 'enc2231-string']]))
-        '<http://example.com/foo>; rel="\\\\"quoted\\\\""; type=text/html; title*=enc2231-string'
+        >>> str(Link('http://example.com/foo', [['rel', '"quoted"'], ['type', 'text/html'], ['title*', "UTF-8'en'%e2%82%ac%20rates"]]))
+        '<http://example.com/foo>; rel="\\\\"quoted\\\\""; type=text/html; title*=UTF-8\\'en\\'%e2%82%ac%20rates'
         
         Note that there is no explicit support for the title* attribute other
         than to output it unquoted.  Where used, it is up to client applications to
@@ -206,7 +203,7 @@ class Link(object):
         return '; '.join(['<%s>' % self.href] +
                          [str_pair(key, value)
                           for key, value in self.attr_pairs])
-
+                          
     def __getitem__(self, key):
         '''Supports list conversion:
         
@@ -215,6 +212,38 @@ class Link(object):
         '''
         return [self.href, self.attr_pairs][key]
 
+    def __getattr__(self, name):
+        '''
+        >>> Link('/', rel='self').rel
+        'self'
+        >>> Link('/', hreflang='EN').hreflang
+        ['EN']
+        >>> Link('/', foo='bar').foo
+        'bar'
+        >>> Link('/', [('foo', 'bar'), ('foo', 'baz')]).foo
+        ['bar', 'baz']
+        >>> Link('/').rel
+        >>> Link('/').hreflang
+        >>> Link('/').foo
+        Traceback (most recent call last):
+            ...
+        AttributeError: No attribute named "foo"
+        '''
+        name_lower = name.lower()
+        values = [value
+                  for key, value in self.attr_pairs
+                  if key.lower() == name_lower]
+        if values:
+            if len(values) > 1 or name in MULTI_VALUED_ATTRS:
+                return values
+            else:
+                return values[0]
+        else:
+            if name in STANDARD_ATTRS:
+                 return None
+            else:
+                raise AttributeError('No attribute named "%s"' % name)
+    
 
 class _Scanner(object):
     def __init__(self, buf):
