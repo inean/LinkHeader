@@ -1,0 +1,7 @@
+Release 0.2
+===========
+* addd to_py() methods to LinkHeader and Link; conversions are no longer via list()
+
+Release 0.1
+===========
+* Initial version

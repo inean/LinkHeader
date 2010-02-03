@@ -13,7 +13,7 @@ LinkHeader([Link('http://example.com/foo', rel='self'), Link('http://example.com
 
 Conversions to and from json-friendly list-based structures are also provided:
 
->>> list(parse(headers['Link']))
+>>> parse(headers['Link']).to_py()
 [['http://example.com/foo', [['rel', 'self']]], ['http://example.com', [['rel', 'up']]]]
 >>> str(LinkHeader([['http://example.com/foo', [['rel', 'self']]],
 ...                 ['http://example.com', [['rel', 'up']]]]))
@@ -24,7 +24,7 @@ For further information see parse(), LinkHeader and Link.
 
 import re
 
-__all__ = ['parse', 'LinkHeader', 'Link', 'ParseException']
+__all__ = ['parse', 'format_links', 'format_link', 'LinkHeader', 'Link', 'ParseException']
 
 SINGLE_VALUED_ATTRS = ['rel', 'anchor', 'rev', 'media', 'title', 'type']
 MULTI_VALUED_ATTRS = ['hreflang', 'title*']
@@ -80,6 +80,12 @@ def parse(header):
 
     return LinkHeader(links)
 
+def format_links(*args, **kwargs):
+    return str(LinkHeader(*args, **kwargs))
+
+def format_link(*args, **kwargs):
+    return str(Link(*args, **kwargs))
+
 
 class ParseException(Exception):
     pass
@@ -104,9 +110,9 @@ class LinkHeader(object):
         >>> str(LinkHeader([Link('http://example.com/foo', rel='foo'), Link('http://example.com', rel='up')]))
         '<http://example.com/foo>; rel=foo, <http://example.com>; rel=up'
         
-        List conversion is json-friendly:
+        Conversion to json-friendly list-based structures:
         
-        >>> list(LinkHeader([Link('http://example.com/foo', rel='foo'), Link('http://example.com', rel='up')]))
+        >>> LinkHeader([Link('http://example.com/foo', rel='foo'), Link('http://example.com', rel='up')]).to_py()
         [['http://example.com/foo', [['rel', 'foo']]], ['http://example.com', [['rel', 'up']]]]
         
         '''
@@ -114,6 +120,14 @@ class LinkHeader(object):
         self.links = [
             link if isinstance(link, Link) else Link(*link)
             for link in links or []]
+
+    def to_py(self):
+        '''Supports list conversion:
+        
+        >>> LinkHeader([Link('http://example.com/foo', rel='foo'), Link('http://example.com', rel='up')]).to_py()
+        [['http://example.com/foo', [['rel', 'foo']]], ['http://example.com', [['rel', 'up']]]]
+        '''
+        return [link.to_py() for link in self.links]
 
     def __repr__(self):
         return 'LinkHeader([%s])' % ', '.join(repr(link) for link in self.links)
@@ -126,14 +140,6 @@ class LinkHeader(object):
         '''
         return ', '.join(str(link) for link in self.links)
 
-    def __getitem__(self, key):
-        '''Supports list conversion:
-        
-        >>> list(LinkHeader([Link('http://example.com/foo', rel='foo'), Link('http://example.com', rel='up')]))
-        [['http://example.com/foo', [['rel', 'foo']]], ['http://example.com', [['rel', 'up']]]]
-        '''
-        return list(self.links[key])
-        
     def links_by_attr_pairs(self, pairs):
         '''Lists links that have attribute pairs matching all the supplied pairs:
         
@@ -161,9 +167,9 @@ class Link(object):
         >>> str(Link('http://example.com', [('foo', 'bar'), ('foo', 'baz')], rel='self'))
         '<http://example.com>; foo=bar; foo=baz; rel=self'
         
-        List conversion is json-friendly:
+        Conversion to json-friendly list-based structures:
 
-        >>> list(Link('http://example.com', [('foo', 'bar'), ('foo', 'baz')], rel='self'))
+        >>> Link('http://example.com', [('foo', 'bar'), ('foo', 'baz')], rel='self').to_py()
         ['http://example.com', [['foo', 'bar'], ['foo', 'baz'], ['rel', 'self']]]
         '''
         self.href = href
@@ -171,6 +177,14 @@ class Link(object):
             list(pair)
             for pair in (attr_pairs or []) + kwargs.items()]
     
+    def to_py(self):
+        '''Convert to a json-friendly list-based structure:
+        
+        >>> Link('http://example.com', rel='foo').to_py()
+        ['http://example.com', [['rel', 'foo']]]
+        '''
+        return [self.href, self.attr_pairs]
+
     def __repr__(self):
         '''
         >>> Link('http://example.com', rel='self')
@@ -204,14 +218,6 @@ class Link(object):
                          [str_pair(key, value)
                           for key, value in self.attr_pairs])
                           
-    def __getitem__(self, key):
-        '''Supports list conversion:
-        
-        >>> list(Link('http://example.com', rel='foo'))
-        ['http://example.com', [['rel', 'foo']]]
-        '''
-        return [self.href, self.attr_pairs][key]
-
     def __getattr__(self, name):
         '''
         >>> Link('/', rel='self').rel
