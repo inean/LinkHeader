@@ -266,9 +266,5 @@ class _Scanner(object):
         return self.match 
 
 
-if __name__ == '__main__':
-    import doctest
-    
-    headers = dict()
-
-    doctest.testmod()
+# For doctest
+headers = dict()
