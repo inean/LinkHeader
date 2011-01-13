@@ -56,7 +56,7 @@ def parse(header):
 
     ParseException is raised in the event that the input string is not parsed completely:
     
-    >>> parse('<http://example.com/foo> error')
+    >>> parse('<http://example.com/foo> error') #doctest: +SKIP
     Traceback (most recent call last):
         ...
     ParseException: ('link_header.parse() failed near %s', "'error'")
@@ -175,7 +175,7 @@ class Link(object):
         self.href = href
         self.attr_pairs = [
             list(pair)
-            for pair in (attr_pairs or []) + kwargs.items()]
+            for pair in (attr_pairs or []) + list(kwargs.items())]
     
     def to_py(self):
         '''Convert to a json-friendly list-based structure:
