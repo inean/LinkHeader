@@ -3,8 +3,8 @@
 from distutils.core import setup
 
 setup(name='LinkHeader',
-      version='0.2.1',
-      description='The parsing and formatting of Link Headers',
+      version='0.2.2',
+      description='Parse and format link headers according to RFC 5988 "Web Linking"',
       author='Michael Burrows',
       author_email='mjb@asplake.co.uk',
       url='http://bitbucket.org/asplake/link_header',

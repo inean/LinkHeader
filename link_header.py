@@ -1,6 +1,5 @@
 '''
-Parse and format link headers according to the draft spec
-http://tools.ietf.org/id/draft-nottingham-http-link-header-07.txt.
+Parse and format link headers according to RFC 5988 "Web Linking".
 
 Usage (assuming a suitable headers object in the environment):
 
