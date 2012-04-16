@@ -22,25 +22,43 @@ __all__ = ['Links', 'Link',]
 # Regexes for link header parsing.  TOKEN and QUOTED in particular
 # should conform to RFC2616.  Acknowledgement: The QUOTED regexp is
 # based on
-# http://stackoverflow.com/questions/249791/regexp-for-quoted-string-with-escaping-quotes/249937#249937
+# http://stackoverflow.com.../regexp-for-quoted-string-with-escaping-quotes
 # Trailing spaces are consumed by each pattern.  The RE_HREF pattern
 # also allows for any leading spaces.
 #
 
-QUOTED        = r'"((?:[^"\\]|\\.)*)"'                  # double-quoted strings with backslash-escaped double quotes
-TOKEN         = r'([^()<>@,;:\"\[\]?={}\s]+)'           # non-empty sequence of non-separator characters
-RE_COMMA_HREF = re.compile(r' *,? *< *([^>]*) *> *')    # includes ',' separator; no attempt to check URI validity
+QUOTED        = r'"((?:[^"\\]|\\.)*)"'
+TOKEN         = r'([^()<>@,;:\"\[\]?={}\s]+)'
+
+RE_COMMA_HREF = re.compile(r' *,? *< *([^>]*) *> *')
 RE_ONLY_TOKEN = re.compile(r'^%(TOKEN)s$' % locals())
 RE_ATTR       = re.compile(r'%(TOKEN)s *= *(%(TOKEN)s|%(QUOTED)s) *' % locals())
 RE_SEMI       = re.compile(r'; *')
 RE_COMMA      = re.compile(r', *')
 
 
-
-
 class LinkError(Exception):
-    pass
+    """Custom exception for link related errors"""
+
     
+#pylint: disable-msg=R0903
+class LinksScanner(object):
+    """Simple scanner for RFC5988 links"""
+    def __init__(self, buf):
+        self.buf = buf
+        self.match = None
+    
+    def __getitem__(self, key):
+        return self.match.group(key)
+        
+    def scan(self, pattern):
+        """Parse a pattern"""
+        self.match = pattern.match(self.buf)
+        if self.match:
+            self.buf = self.buf[self.match.end():]
+        return self.match
+
+        
 #pylint: disable-msg=R0903
 class Links(object):
     """
@@ -87,18 +105,19 @@ class Links(object):
     @staticmethod
     def parse(header):
         """Parses a links header string to a Links instance"""
-        scanner = _Scanner(header)
+        scanner = LinksScanner(header)
         links   = []
         while scanner.scan(RE_COMMA_HREF):
             href  = scanner[1]
             attrs = []
             while scanner.scan(RE_SEMI):
                 if scanner.scan(RE_ATTR):
-                    attr_name, token, quoted = scanner[1], scanner[3], scanner[4]
+                    name, token, quoted = scanner[1], scanner[3], scanner[4]
                     if quoted:
-                        attrs.append([attr_name, quoted.replace(r'\"', '"')])
+                        attrs.append([name, quoted.replace(r'\"', '"')])
                     else:
-                        attrs.append([attr_name, token])
+                        attrs.append([name, token])
+                #pylint: disable-msg=W0142
                 links.append(Link(href, **attrs))
         if scanner.buf:
             raise LinkError(
@@ -110,9 +129,14 @@ class Links(object):
 class Link(object):
     """Represents a single link"""
     
-    SINGLE_VALUED_ATTRS = ['rel', 'anchor', 'rev', 'media', 'title', 'type', 'href']
-    MULTI_VALUED_ATTRS  = ['hreflang', 'title*']
-    STANDARD_ATTRS      = SINGLE_VALUED_ATTRS + MULTI_VALUED_ATTRS
+    SINGLE_VALUED_ATTRS = [
+        'rel', 'anchor', 'rev', 'media',
+        'title', 'type', 'href'
+    ]
+    MULTI_VALUED_ATTRS  = [
+        'hreflang', 'title*'
+    ]
+    STANDARD_ATTRS = SINGLE_VALUED_ATTRS + MULTI_VALUED_ATTRS
 
     def __init__(self, href, rel, **data):
         data.update((('rel', rel), ('href', href)))
@@ -152,20 +176,8 @@ class Link(object):
 
     @staticmethod
     def str_pair(key, value):
+        """Join a pair of key, paramaters as required by RFC5988"""
         return '%s=%s' % (key, value)                             \
                if RE_ONLY_TOKEN.match(value) or key.endswith('*') \
                else '%s="%s"' % (key, value.replace('"', r'\"'))
     
-class _Scanner(object):
-    def __init__(self, buf):
-        self.buf = buf
-        self.match = None
-    
-    def __getitem__(self, key):
-        return self.match.group(key)
-        
-    def scan(self, pattern):
-        self.match = pattern.match(self.buf)
-        if self.match:
-            self.buf = self.buf[self.match.end():]
-        return self.match
