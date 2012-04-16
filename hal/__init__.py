@@ -82,43 +82,34 @@ class Links(object):
     def __str__(self):
         return ', '.join(str(link) for link in self._links.itervalues())
 
-    def __getattr__(self, value):
-        raise LinkError("'%s' link is missing or malformed" % value)
+    def rel(self, rel, default=None):
+        """Returns Link  associated to relative"""
+        return self._links.get(rel, default)
 
     def to_py(self):
         """Supports dict conversion JSON compatible"""
         return dict((link.to_py() for link in self._links.itervalues()))
-
-    def get(self, rel, default=None):
-        """Checks Link existence"""
-        return self._links.get(rel, default)
 
     def update(self, links):
         """Update links with links"""
         for link in links:
             if hasattr(link, 'rel') and hasattr(link, 'href'):
                 assert 'rel' not in self._links
-                self._links.setdefault(link.rel, link)
-            if not hasattr(self, link.rel):
-                setattr(self, link.rel, self._links[link.rel])
+                self._links[link.rel] = link
 
     @staticmethod
     def parse(header):
         """Parses a links header string to a Links instance"""
         scanner = LinksScanner(header)
         links   = []
-        while scanner.scan(RE_COMMA_HREF):
-            href  = scanner[1]
-            attrs = []
+        while header and scanner.scan(RE_COMMA_HREF):
+            attrs = {'href': scanner[1]}
             while scanner.scan(RE_SEMI):
                 if scanner.scan(RE_ATTR):
-                    name, token, quoted = scanner[1], scanner[3], scanner[4]
-                    if quoted:
-                        attrs.append([name, quoted.replace(r'\"', '"')])
-                    else:
-                        attrs.append([name, token])
-                #pylint: disable-msg=W0142
-                links.append(Link(href, **attrs))
+                    name, token, quot = scanner[1], scanner[3], scanner[4]
+                    attrs[name] = quot.replace(r'\"', '"') if quot else token
+            #pylint: disable-msg=W0142
+            links.append(Link(**attrs))
         if scanner.buf:
             raise LinkError(
                 "link_header.parse() failed near %s",
@@ -138,13 +129,19 @@ class Link(object):
     ]
     STANDARD_ATTRS = SINGLE_VALUED_ATTRS + MULTI_VALUED_ATTRS
 
-    def __init__(self, href, rel, **data):
+    def __init__(self, href=None, rel=None, **data):
+        href = href or data.get('href')
+        rel  = rel  or data.get('rel')
+        #assert href and rel
+        # now update
         data.update((('rel', rel), ('href', href)))
         super(Link, self).__setattr__('_dict', data)
 
     def __repr__(self):
-        pairs = [pair for pair in self._dict if pair[0] != 'rel']
-        return 'Link(%s)' % ', '.join((self.href, "rel=%s" % self.rel, pairs))
+        pairs = ifilter(lambda item: item[0] != 'href', self._dict.iteritems())
+        return 'Link(%s)' % ', '.join(chain(
+            (repr(self.href),),
+            ("%s=%s" % (key, repr(value),) for key, value in pairs)))
 
     def __str__(self):
         """Formats a single link"""
