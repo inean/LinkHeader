@@ -40,7 +40,7 @@ class HalTests(unittest.TestCase):
             matches = (expected == actual)
         else:
             # Python 3 reverses the 2nd and 3rd items in 
-            # the dictionary compared with python 2 but not consistenly
+            # the dictionary compared with python 2 but not consistently
             expected1 = "<" + self._href + ">; rel=" + self._rel + "; title=mytitle"
             expected2 = "<" + self._href + ">; title=mytitle; rel=" + self._rel
             matches = (expected1 == actual or expected2 == actual)
@@ -70,7 +70,7 @@ class HalTests(unittest.TestCase):
             self.assertEqual(actual, expected)
         else:
             # Python 3 reverses the 2nd and 3rd items in 
-            # the dictionary compared with python 2 but not consistenly
+            # the dictionary compared with python 2 but not consistently
             # 
             # Actual values from different runs:
             # <http://example.org>; title="title 2"; rel=child, <http://example.com>; title=mytitle; rel=paren
