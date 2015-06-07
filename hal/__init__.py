@@ -12,9 +12,19 @@ from __future__ import absolute_import
 __author__  = "Michael Burrows, Mark Nottingham, Carlos Martín"
 __license__ = "See LICENSE file for details"
 
+# Inspect runtime environment
+has_itervalues = hasattr({}, 'itervalues')
+has_iteritems = hasattr({}, 'iteritems')
+has_ifilter = False
+
 # Import Here any required modules for this module.
 import re
-from itertools import chain, ifilter
+
+try:
+    from itertools import chain, ifilter
+    has_ifilter = True
+except ImportError:
+    from itertools import chain
 
 __all__ = ['Links', 'Link',]
 
@@ -71,7 +81,10 @@ class Links(object):
         self.update(links)
 
     def __iter__(self):
-        return self._links.itervalues()
+        if has_itervalues:
+            return self._links.itervalues()
+        else:
+            return iter(self._links.values())
 
     def __len__(self):
         return len(self._links)
@@ -80,7 +93,10 @@ class Links(object):
         return 'Links([%s])' % ', '.join(repr(link) for link in self)
 
     def __str__(self):
-        return ', '.join(str(link) for link in self._links.itervalues())
+        if has_itervalues:
+            return ', '.join(str(link) for link in self._links.itervalues())
+        else:
+            return ', '.join(str(link) for link in self._links.values())
 
     def rel(self, rel, default=None):
         """Returns Link  associated to relative"""
@@ -88,7 +104,10 @@ class Links(object):
 
     def to_py(self):
         """Supports dict conversion JSON compatible"""
-        return dict((link.to_py() for link in self._links.itervalues()))
+        if has_itervalues:
+            return dict((link.to_py() for link in self._links.itervalues()))
+        else:
+            return dict((link.to_py() for link in self._links.values()))
 
     def update(self, links):
         """Update links with links"""
@@ -138,14 +157,22 @@ class Link(object):
         super(Link, self).__setattr__('_dict', data)
 
     def __repr__(self):
-        pairs = ifilter(lambda item: item[0] != 'href', self._dict.iteritems())
+        if has_ifilter and has_iteritems:
+            pairs = ifilter(lambda item: item[0] != 'href', self._dict.iteritems())
+        else:
+            pairs = filter(lambda item: item[0] != 'href', self._dict.items())
+
         return 'Link(%s)' % ', '.join(chain(
             (repr(self.href),),
             ("%s=%s" % (key, repr(value),) for key, value in pairs)))
 
     def __str__(self):
         """Formats a single link"""
-        pairs = ifilter(lambda item: item[0] != 'href', self._dict.iteritems())
+        if has_ifilter and has_iteritems:
+            pairs = ifilter(lambda item: item[0] != 'href', self._dict.iteritems())
+        else:
+            pairs = filter(lambda item: item[0] != 'href', self._dict.items())
+
         return '; '.join(chain(
             ('<%s>' % self.href,),
             (self.str_pair(key, value) for key, value in pairs)))
